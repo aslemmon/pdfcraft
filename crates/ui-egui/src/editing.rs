@@ -42,33 +42,32 @@ fn select_after_edit(view: &mut crate::DocView, edit: Edit, info: &pdfcraft_rend
         }
         Edit::InsertBlankPage { at, .. } => view.select_pages(&[at.min(info.pages.len() - 1)]),
         Edit::DeletePages { .. } => view.select_pages(&[]),
-        // A stroke drawn with the pen stays unselected, so the selection box and
-        // author popup don't sit over the next stroke (#429).
         Edit::AddAnnotation(a)
             if matches!(a.shape, pdfcraft_engine::Shape::Ink { .. })
                 && quick_tool == crate::QuickTool::Comment(crate::comments::CommentTool::Ink) =>
         {
             view.comments.selected = None;
         }
+        Edit::AddAnnotation(a)
+            if matches!(
+                a.shape,
+                pdfcraft_engine::Shape::TextMarkup {
+                    kind: pdfcraft_engine::Markup::Highlight,
+                    ..
+                }
+            ) =>
+        {
+            view.comments.selected = None;
+        }
         Edit::AddAnnotation(a) => {
-            // Select the new comment (appended last among the page's comments).
             let newest = info.annotations.iter().filter(|x| x.page == a.page && !x.is_reply()).map(|x| x.index).max();
             view.comments.selected = newest.map(|n| (a.page, n));
             view.comments.reveal = true;
-            // A new highlight opens its note for typing straight away, as in Acrobat,
-            // unless a note typed into another card is still unsaved.
-            if let (pdfcraft_engine::Shape::TextMarkup { kind: pdfcraft_engine::Markup::Highlight, .. }, Some(n)) = (&a.shape, newest)
-                && a.contents.is_empty()
-                && view.comments.editing.is_none()
-            {
-                view.comments.open_editor(a.page, n, String::new());
-            }
         }
         Edit::DeleteAnnotation { .. } => view.comments.selected = None,
         _ => {}
     }
 }
-
 /// The pages whose widgets differ between two form states, and the (field, page) pairs whose
 /// value changed and so must not be drawn from the baked page.
 fn form_edit_pages(
