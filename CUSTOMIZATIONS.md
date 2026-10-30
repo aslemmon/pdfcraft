@@ -46,21 +46,39 @@ The original project's main branch remains as close as possible to upstream.
 
 **Branch:** `feature/deselect-after-highlight`
 
-**Objective:** Automatically clear the active text selection after a highlight annotation has been created.
+**Objective:** Keep newly created highlight annotations deselected, rather than automatically selecting them in the Comments panel.
 
 **Desired behavior:**
 - Create the highlight annotation normally.
-- Clear the active text selection immediately afterward.
+- Clear the active comment selection immediately after creation.
+- Do not automatically open the highlight's note editor.
 - Keep the current highlighting tool active so another selection can be made.
 - Do not remove or otherwise affect the newly created annotation.
+- Preserve the existing behavior for other annotation types.
 
-**Priority:** High – next feature to implement.
+**Implementation status:** Complete.
 
-### 3. Save and Store Custom Highlight Colors
+**Tests:** Updated integration tests to verify that text and area highlights remain deselected and do not automatically open the note editor.
+
+**Priority:** Completed.
+
+### 3. Custom Highlight Colors and Keyboard Shortcuts
 
 **Branch:** `feature/custom-highlight-colors`
 
-**Objective:** Allow users to define custom highlight colors and save them for reuse across documents and application sessions.
+**Objective:** Improve highlighting efficiency by allowing users to save custom highlight colors and quickly access them using keyboard shortcuts.
+
+**Desired behavior:**
+- Allow users to create custom highlight colors.
+- Save favorite colors persistently across application sessions.
+- Retain the existing standard highlight colors.
+- Remember the last-used color.
+- Provide keyboard shortcuts for activating the highlighter and other commonly used annotation tools.
+- Provide convenient keyboard shortcuts for selecting saved highlight colors.
+- Provide a keyboard shortcut for returning to the Select tool.
+- Avoid conflicts with existing application shortcuts and normal text editing.
+
+**Implementation consideration:** Build the saved color system first, then integrate keyboard shortcuts with the saved palette. Consider whether color shortcuts should be fixed or user-configurable.
 
 **Status:** Planned.
 
@@ -69,14 +87,6 @@ The original project's main branch remains as close as possible to upstream.
 **Branch:** `feature/hide-toolbars`
 
 **Objective:** Provide the ability to hide and restore application toolbars to create a cleaner document viewing and reading experience.
-
-**Status:** Planned.
-
-### 5. Keyboard Shortcuts for Highlights and Colors
-
-**Branch:** `feature/highlight-keyboard-shortcuts`
-
-**Objective:** Introduce keyboard shortcuts for common highlighting actions and quick selection of highlight colors.
 
 **Status:** Planned.
 
