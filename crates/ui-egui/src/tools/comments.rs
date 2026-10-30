@@ -284,6 +284,8 @@ pub struct CommentPrefs {
     styles: Vec<(CommentTool, Style)>,
     /// Keep the tool selected after use (the pin).
     pub pinned: bool,
+    /// Custom colours explicitly pinned by the user (newest first).
+    pub pinned_custom_colours: Vec<Rgb>,
     /// The tool each flyout group shows (the last one used).
     pub group_tool: [CommentTool; 3],
     /// Hide hover previews on highlight annotations when they contain no comment text beyond the author.
@@ -296,6 +298,7 @@ impl Default for CommentPrefs {
             author: login_name(),
             styles: ALL.iter().map(|t| (*t, Style::default_for(&t.sample()))).collect(),
             pinned: false,
+            pinned_custom_colours: Vec::new(),
             group_tool: [CommentTool::Note, CommentTool::Highlight, CommentTool::Ink],
             hide_empty_highlight_hover: false,
         }
@@ -303,6 +306,28 @@ impl Default for CommentPrefs {
 }
 
 impl CommentPrefs {
+    /// Pin a custom colour, keeping at most five.
+    pub fn pin_custom_colour(&mut self, colour: Rgb) {
+        if !colour.iter().all(|v| v.is_finite()) {
+            return;
+        }
+
+        let colour = colour.map(|v| v.clamp(0.0, 1.0));
+
+        if self.pinned_custom_colours.iter().any(|c| menu::same_colour(c, &colour)) {
+            return;
+        }
+
+        if self.pinned_custom_colours.len() < 5 {
+            self.pinned_custom_colours.push(colour);
+        }
+    }
+
+    /// Unpin a custom colour.
+    pub fn unpin_custom_colour(&mut self, colour: &Rgb) {
+        self.pinned_custom_colours.retain(|c| !menu::same_colour(c, colour));
+    }
+
     pub fn style(&self, tool: CommentTool) -> Style {
         self.styles.iter().find(|(t, _)| *t == tool).map(|(_, s)| s.clone()).unwrap_or_default()
     }

@@ -194,6 +194,27 @@ fn swatch(ui: &mut egui::Ui, c: Rgb, on: bool, tooltip: &str) -> egui::Response 
     resp.on_hover_text(tooltip)
 }
 
+/// Draw a custom colour swatch, with a gray outline when pinned.
+fn custom_swatch(ui: &mut egui::Ui, c: Rgb, on: bool, pinned: bool) -> bool {
+    let (rect, response) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::click());
+    let [r, g, b, _] = color32(c).to_array();
+
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("#{r:02X}{g:02X}{b:02X}")));
+
+    ui.painter().circle_filled(rect.center(), 9.0, color32(c));
+    ui.painter().circle_stroke(rect.center(), 9.0, Stroke::new(1.0, Color32::from_black_alpha(40)));
+
+    if pinned {
+        ui.painter().circle_stroke(rect.center(), 11.0, Stroke::new(1.5, Color32::from_gray(135)));
+    }
+
+    if on || response.hovered() {
+        ui.painter().circle_stroke(rect.center(), if pinned { 13.0 } else { 11.0 }, Stroke::new(1.5, SELECT_BLUE));
+    }
+
+    response.on_hover_text(format!("#{r:02X}{g:02X}{b:02X}")).clicked()
+}
+
 /// The "+" swatch that opens "Other colour…": a ring with a plus, the size of a swatch.
 fn other_colour_swatch(ui: &mut egui::Ui, open: bool) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::click());
@@ -215,6 +236,15 @@ fn other_colour_swatch(ui: &mut egui::Ui, open: bool) -> egui::Response {
 /// quick colours offer) and, once used, the recent custom colours; returns the colour chosen.
 /// The "+" sits in the first row, so the grid is no taller than before until the picker opens.
 pub fn swatch_grid(ui: &mut egui::Ui, current: Option<Rgb>) -> Option<Rgb> {
+    swatch_grid_inner(ui, current, None)
+}
+
+/// Comments colour grid with persistent custom-colour pinning.
+fn swatch_grid_with_prefs(ui: &mut egui::Ui, current: Option<Rgb>, prefs: &mut super::CommentPrefs) -> Option<Rgb> {
+    swatch_grid_inner(ui, current, Some(prefs))
+}
+
+fn swatch_grid_inner(ui: &mut egui::Ui, current: Option<Rgb>, mut prefs: Option<&mut super::CommentPrefs>) -> Option<Rgb> {
     let mut picked = None;
     let on = |c: &Rgb| current.is_some_and(|cur| same_colour(&cur, c));
     // Keyed on this grid's own place in the parent, so two grids in one dialog open their
@@ -239,14 +269,38 @@ pub fn swatch_grid(ui: &mut egui::Ui, current: Option<Rgb>) -> Option<Rgb> {
             }
         }
     });
+    let pinned = prefs.as_deref().map(|p| p.pinned_custom_colours.clone()).unwrap_or_default();
     let recent = recent_custom_colours(ui.ctx());
-    if !recent.is_empty() {
+    let remaining = RECENT_CUSTOM.saturating_sub(pinned.len());
+    let mut custom: Vec<(Rgb, bool)> = pinned.iter().copied().map(|c| (c, true)).collect();
+
+    for c in recent {
+        if custom.len() >= RECENT_CUSTOM {
+            break;
+        }
+        if pinned.iter().any(|p| same_colour(p, &c)) || custom.iter().any(|(existing, _)| same_colour(existing, &c)) {
+            continue;
+        }
+        if custom.iter().filter(|(_, is_pinned)| !is_pinned).count() >= remaining {
+            break;
+        }
+        custom.push((c, false));
+    }
+
+    if !custom.is_empty() {
         ui.label(egui::RichText::new(tl!("Recent colours")).small());
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            for c in &recent {
-                let [r, g, b, _] = color32(*c).to_array();
-                if swatch(ui, *c, on(c), &format!("#{r:02X}{g:02X}{b:02X}")).clicked() {
+
+            for (c, is_pinned) in &custom {
+                let selected = if prefs.is_some() {
+                    custom_swatch(ui, *c, on(c), *is_pinned)
+                } else {
+                    let [r, g, b, _] = color32(*c).to_array();
+                    swatch(ui, *c, on(c), &format!("#{r:02X}{g:02X}{b:02X}")).clicked()
+                };
+
+                if selected {
                     picked = Some(*c);
                 }
             }
@@ -256,12 +310,38 @@ pub fn swatch_grid(ui: &mut egui::Ui, current: Option<Rgb>) -> Option<Rgb> {
         let mut value = ui.data(|d| d.get_temp::<Color32>(value_id)).unwrap_or_else(|| current.map_or(Color32::BLACK, color32));
         egui::widgets::color_picker::color_picker_color32(ui, &mut value, egui::widgets::color_picker::Alpha::Opaque);
         ui.data_mut(|d| d.insert_temp(value_id, value));
-        // Dragging in the picker previews nothing; Apply commits once (one undo step).
-        if ui.button(tl!("Apply")).clicked() {
-            let c = rgb_of(value);
-            remember_custom_colour(ui.ctx(), c);
-            picked = Some(c);
-        }
+        // Pinning is available only in the Highlight picker.
+        // It applies to the colour currently displayed, independently of Apply.
+        ui.horizontal(|ui| {
+            if let Some(prefs) = prefs.as_deref_mut() {
+                let c = rgb_of(value);
+                let is_pinned = prefs.pinned_custom_colours.iter().any(|p| same_colour(p, &c));
+                let can_pin = is_pinned || prefs.pinned_custom_colours.len() < 5;
+
+                let label = if is_pinned { "Unpin colour" } else { "Pin colour" };
+
+                let pin_button = ui.add_enabled(can_pin, egui::Button::new(label));
+
+                if !can_pin {
+                    pin_button.clone().on_hover_text("You can pin up to five custom colours");
+                }
+
+                if pin_button.clicked() {
+                    if is_pinned {
+                        prefs.unpin_custom_colour(&c);
+                    } else {
+                        prefs.pin_custom_colour(c);
+                    }
+                }
+            }
+
+            // Apply commits the selected colour independently of pinning.
+            if ui.button(tl!("Apply")).clicked() {
+                let c = rgb_of(value);
+                remember_custom_colour(ui.ctx(), c);
+                picked = Some(c);
+            }
+        });
     }
     if picked.is_some() {
         open = false;
@@ -299,7 +379,9 @@ pub(crate) fn quick_bar_controls(ui: &mut egui::Ui, tool: CommentTool, prefs: &m
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Colour")));
     let resp = resp.on_hover_text(tl!("Colour"));
     egui::Popup::menu(&resp).align(egui::RectAlign::RIGHT_START).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-        if let Some(c) = swatch_grid(ui, Some(style.color)) {
+        let picked =
+            if tool == CommentTool::Highlight { swatch_grid_with_prefs(ui, Some(style.color), prefs) } else { swatch_grid(ui, Some(style.color)) };
+        if let Some(c) = picked {
             prefs.set_color(tool, c);
             selected_color = Some(c);
             ui.close();
