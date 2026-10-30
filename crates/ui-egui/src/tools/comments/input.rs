@@ -302,7 +302,38 @@ fn select_input(
 
 /// After text selection ran: a markup tool turns a finished selection into a comment; Replace
 /// Text asks for the replacement.
-pub(crate) fn page_after_text(resp: &egui::Response, cx: &PageCx<'_>, view: &mut DocView) {
+pub(crate) fn page_after_text(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, view: &mut DocView) {
+    let now = ui.input(|input| input.time);
+
+    // A third click upgrades the pending word highlight to a line highlight.
+    if cx.tool == QuickTool::Comment(CommentTool::Highlight) && cx.allowed && resp.triple_clicked() {
+        view.comments.pending_markup = None;
+        if let Some((_page, quads)) = view.selection_quads(cx.info).filter(|(page, _)| *page == cx.page) {
+            view.clear_selection();
+            view.pending_edit = Some(new_comment(
+                cx,
+                CommentTool::Highlight,
+                Shape::TextMarkup { kind: CommentTool::Highlight.markup().unwrap(), quads },
+                String::new(),
+            ));
+        }
+        return;
+    }
+
+    // Commit a pending word highlight once the double-click window has expired.
+    if let Some((due, page, tool, quads)) = view.comments.pending_markup.take() {
+        if page == cx.page && now >= due {
+            if let Some(kind) = tool.markup() {
+                view.pending_edit = Some(new_comment(cx, tool, Shape::TextMarkup { kind, quads }, String::new()));
+            }
+        } else {
+            view.comments.pending_markup = Some((due, page, tool, quads));
+            if page == cx.page {
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64((due - now).max(0.0)));
+            }
+        }
+    }
+
     let QuickTool::Comment(tool) = cx.tool else { return };
     if tool == CommentTool::ReplaceText && cx.allowed && (resp.drag_stopped() || resp.double_clicked()) {
         if let Some((page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page) {
@@ -314,15 +345,27 @@ pub(crate) fn page_after_text(resp: &egui::Response, cx: &PageCx<'_>, view: &mut
         }
         return;
     }
-    if tool.markup().is_none() || !cx.allowed || !(resp.drag_stopped() || resp.double_clicked()) {
+
+    if tool.markup().is_none() || !cx.allowed {
         return;
     }
-    if let Some(kind) = tool.markup()
-        && let Some((page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page)
-    {
-        view.clear_selection();
-        view.pending_edit = Some(new_comment(cx, tool, Shape::TextMarkup { kind, quads }, String::new()));
-        let _ = page;
+
+    if resp.drag_stopped() {
+        if let Some((_page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page) {
+            view.clear_selection();
+            view.pending_edit = Some(new_comment(cx, tool, Shape::TextMarkup { kind: tool.markup().unwrap(), quads }, String::new()));
+        }
+    } else if resp.double_clicked() {
+        if let Some((_page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page) {
+            view.clear_selection();
+            if tool == CommentTool::Highlight {
+                let delay = ui.ctx().options(|options| options.input_options.max_double_click_delay);
+                view.comments.pending_markup = Some((now + delay, cx.page, tool, quads));
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(delay.max(0.0)));
+            } else {
+                view.pending_edit = Some(new_comment(cx, tool, Shape::TextMarkup { kind: tool.markup().unwrap(), quads }, String::new()));
+            }
+        }
     }
 }
 
