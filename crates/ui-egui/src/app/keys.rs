@@ -91,8 +91,13 @@ impl PdfCraftApp {
     /// palette has the keyboard.
     fn tool_keys(&mut self, i: usize, ctx: &egui::Context) {
         use egui::Key;
+
+        const PREFIX_TIMEOUT: f64 = 1.0;
+
         let free = self.dialog.is_none() && !self.palette_open && !ctx.egui_wants_keyboard_input() && self.views[i].forms.focus.is_none();
-        let (plain, space) = ctx.input(|input| (input.modifiers.is_none(), input.key_down(Key::Space)));
+
+        let (plain, space, now) = ctx.input(|input| (input.modifiers.is_none(), input.key_down(Key::Space), input.time));
+
         if let Some(previous) = self.space_hand
             && !space
         {
@@ -101,17 +106,108 @@ impl PdfCraftApp {
                 self.quick_tool = previous;
             }
         }
+
         if !free || !plain {
+            self.annotation_prefix_at = None;
             return;
         }
+
+        if self.annotation_prefix_at.is_some_and(|started| now - started > PREFIX_TIMEOUT) {
+            self.annotation_prefix_at = None;
+        }
+
+        // Number keys select pinned custom colours for markup annotation tools.
+        // Do not handle them while an A-prefix shortcut is in progress.
+        if self.annotation_prefix_at.is_none()
+            && let QuickTool::Comment(tool) = self.quick_tool
+            && tool.markup().is_some()
+        {
+            let slot = ctx.input(|input| {
+                [(Key::Num1, 0), (Key::Num2, 1), (Key::Num3, 2), (Key::Num4, 3), (Key::Num5, 4)]
+                    .into_iter()
+                    .find_map(|(key, index)| input.key_pressed(key).then_some((key, index)))
+            });
+
+            if let Some((key, index)) = slot
+                && let Some(colour) = self.comment_prefs.pinned_custom_colours.get(index).copied()
+            {
+                self.comment_prefs.set_color(tool, colour);
+                ctx.input_mut(|input| {
+                    input.consume_key(egui::Modifiers::NONE, key);
+                });
+            }
+        }
+
+        if self.annotation_prefix_at.is_some() {
+            let next = ctx.input(|input| {
+                if input.key_pressed(Key::H) {
+                    Some(comments::CommentTool::Highlight)
+                } else if input.key_pressed(Key::U) {
+                    Some(comments::CommentTool::Underline)
+                } else if input.key_pressed(Key::S) {
+                    Some(comments::CommentTool::StrikeOut)
+                } else if input.key_pressed(Key::Q) {
+                    Some(comments::CommentTool::Squiggly)
+                } else {
+                    None
+                }
+            });
+
+            if let Some(tool) = next {
+                ctx.input_mut(|input| {
+                    input.consume_key(egui::Modifiers::NONE, Key::H);
+                    input.consume_key(egui::Modifiers::NONE, Key::U);
+                    input.consume_key(egui::Modifiers::NONE, Key::S);
+                    input.consume_key(egui::Modifiers::NONE, Key::Q);
+                });
+                self.annotation_prefix_at = None;
+                self.quick_tool = QuickTool::Comment(tool);
+                self.space_hand = None;
+                self.comment_prefs.group_tool[tool.group()] = tool;
+                return;
+            }
+
+            let cancel_keys = ctx.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .filter_map(|event| match event {
+                        egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            });
+
+            if !cancel_keys.is_empty() {
+                // Consume the invalid continuation so it cannot trigger another shortcut.
+                ctx.input_mut(|input| {
+                    for (key, modifiers) in cancel_keys {
+                        input.consume_key(modifiers, key);
+                    }
+                });
+                self.annotation_prefix_at = None;
+                return;
+            }
+        }
+
+        if ctx.input(|input| input.key_pressed(Key::A)) {
+            ctx.input_mut(|input| {
+                input.consume_key(egui::Modifiers::NONE, Key::A);
+            });
+            self.annotation_prefix_at = Some(now);
+            return;
+        }
+
         if ctx.input(|input| input.key_pressed(Key::V)) {
             self.quick_tool = QuickTool::Select;
             self.space_hand = None;
         }
+
         if ctx.input(|input| input.key_pressed(Key::H)) {
             self.quick_tool = QuickTool::Hand;
             self.space_hand = None;
         }
+
         if space && self.space_hand.is_none() && self.quick_tool != QuickTool::Hand {
             self.space_hand = Some(self.quick_tool);
             self.quick_tool = QuickTool::Hand;

@@ -310,7 +310,7 @@ fn swatch_grid_inner(ui: &mut egui::Ui, current: Option<Rgb>, mut prefs: Option<
         let mut value = ui.data(|d| d.get_temp::<Color32>(value_id)).unwrap_or_else(|| current.map_or(Color32::BLACK, color32));
         egui::widgets::color_picker::color_picker_color32(ui, &mut value, egui::widgets::color_picker::Alpha::Opaque);
         ui.data_mut(|d| d.insert_temp(value_id, value));
-        // Pinning is available only in the Highlight picker.
+        // Pinning is available for all markup annotation tools.
         // It applies to the colour currently displayed, independently of Apply.
         ui.horizontal(|ui| {
             if let Some(prefs) = prefs.as_deref_mut() {
@@ -379,8 +379,7 @@ pub(crate) fn quick_bar_controls(ui: &mut egui::Ui, tool: CommentTool, prefs: &m
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Colour")));
     let resp = resp.on_hover_text(tl!("Colour"));
     egui::Popup::menu(&resp).align(egui::RectAlign::RIGHT_START).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-        let picked =
-            if tool == CommentTool::Highlight { swatch_grid_with_prefs(ui, Some(style.color), prefs) } else { swatch_grid(ui, Some(style.color)) };
+        let picked = if tool.markup().is_some() { swatch_grid_with_prefs(ui, Some(style.color), prefs) } else { swatch_grid(ui, Some(style.color)) };
         if let Some(c) = picked {
             prefs.set_color(tool, c);
             selected_color = Some(c);

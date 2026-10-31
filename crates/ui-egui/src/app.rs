@@ -85,6 +85,7 @@ impl PdfCraftApp {
             right_panel_closed: false,
             quick_tool: QuickTool::Select,
             space_hand: None,
+            annotation_prefix_at: None,
             full_screen_tool: None,
             comment_prefs: Default::default(),
             theme: ThemeKind::Light,
