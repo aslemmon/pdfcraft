@@ -76,32 +76,43 @@ fn quick_clicks_select_a_word_then_the_line_then_the_page() {
 }
 
 #[test]
-fn quick_clicks_with_the_highlighter_mark_only_the_word() {
+fn double_click_with_the_highlighter_marks_only_the_word() {
     let (mut h, at) = harness(|app| assert!(app.execute("comment.highlight")));
-    for _ in 0..4 {
-        click(&mut h, at);
-        // The double-click's highlight re-renders the page; give its text layer up to 8 frames
-        // to come back (still well inside egui's 0.3 s multi-click window at 1/60 s a frame), so
-        // a loaded machine doesn't make the later clicks land on a page with no text yet.
-        for _ in 0..8 {
-            if !h.state().render_pending() {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(20));
-            h.run_steps(1);
-        }
-    }
-    h.run_steps(3);
-    // Under load the mark can land later; wait for it (egui's clock is fixed per frame, so
-    // waiting can't turn the clicks into a different run). By state, not for a fixed second
-    // (#1277).
-    crate::support::wait_until(&mut h, "the highlight and the page after it", |app| {
+    click(&mut h, at);
+    click(&mut h, at);
+
+    crate::support::wait_until(&mut h, "the delayed word highlight", |app| {
         app.session.get(app.views[0].id).is_some_and(|d| !d.info.annotations.is_empty()) && !app.render_pending()
     });
+
     let app = h.state();
     let doc = app.session.get(app.views[0].id).unwrap();
     let marks: Vec<(&str, usize)> = doc.info.annotations.iter().map(|a| (a.subtype.as_str(), a.quads.len())).collect();
-    assert_eq!(marks, [("Highlight", 1)], "one highlight, on the double-clicked word");
+
+    assert_eq!(marks, [("Highlight", 1)]);
+    assert!(app.views[0].selected_text().is_none());
+}
+
+#[test]
+fn triple_click_with_the_highlighter_marks_the_line() {
+    let (mut h, at) = harness(|app| assert!(app.execute("comment.highlight")));
+
+    for _ in 0..3 {
+        click(&mut h, at);
+    }
+
+    crate::support::wait_until(&mut h, "the line highlight", |app| {
+        app.session.get(app.views[0].id).is_some_and(|d| !d.info.annotations.is_empty()) && !app.render_pending()
+    });
+
+    let app = h.state();
+    let doc = app.session.get(app.views[0].id).unwrap();
+    let marks: Vec<(&str, usize)> = doc.info.annotations.iter().map(|a| (a.subtype.as_str(), a.quads.len())).collect();
+
+    assert_eq!(marks, [("Highlight", 1)]);
+    let width = (doc.info.annotations[0].quads[0][2] - doc.info.annotations[0].quads[0][0]).abs();
+
+    assert!(width > 60.0, "Expected a line highlight, got width {width}");
     assert!(app.views[0].selected_text().is_none());
 }
 

@@ -1458,7 +1458,23 @@ fn update_selection_on_press(ui: &egui::Ui, view: &mut DocView, text: &PageText,
 }
 
 fn selection_click_count(clicks: u32, tool: QuickTool) -> u32 {
-    if clicks > 2 && tool != QuickTool::Select { 1 } else { clicks }
+    match tool {
+        QuickTool::Select => clicks,
+        QuickTool::Comment(comments::CommentTool::Highlight) => {
+            if clicks > 3 {
+                1
+            } else {
+                clicks
+            }
+        }
+        _ => {
+            if clicks > 2 {
+                1
+            } else {
+                clicks
+            }
+        }
+    }
 }
 
 fn update_dragged_selection(view: &mut DocView, text: &PageText, gesture: &TextGesture<'_>) {
@@ -1559,7 +1575,7 @@ fn page_overlays(ui: &mut egui::Ui, view: &mut DocView, frame: &mut PageFrame<'_
     }
     crate::image_pick::drop_stale(doc, view);
     crate::image_pick::paint(painter, &xf, i, info, view);
-    comments::page_after_text(resp, &pcx, view);
+    comments::page_after_text(ui, resp, &pcx, view);
     if tool == QuickTool::Redact && can_modify {
         crate::redact_ui::after_text(resp, i, info, view);
     }

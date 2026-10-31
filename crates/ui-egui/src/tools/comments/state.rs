@@ -168,6 +168,8 @@ pub struct CommentView {
     pub context_at: Option<(usize, [f64; 2])>,
     /// A one-shot tool just finished; the app returns to the Select tool unless pinned.
     pub tool_done: bool,
+    /// A word highlight waiting to see whether the double-click becomes a triple-click.
+    pub(crate) pending_markup: Option<(f64, usize, CommentTool, Vec<[f64; 8]>)>,
     /// What the inline editor (`editing`) does with the keyboard the next time it is drawn.
     pub(crate) editor_focus: Option<EditorFocus>,
 }
