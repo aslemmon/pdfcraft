@@ -50,8 +50,11 @@ fn select_after_edit(
         Edit::InsertBlankPage { at, .. } => view.select_pages(&[(*at).min(info.pages.len() - 1)]),
         Edit::DeletePages { .. } => view.select_pages(&[]),
         Edit::AddAnnotation(a)
-            if matches!(a.shape, pdfcraft_engine::Shape::Ink { .. })
-                && quick_tool == crate::QuickTool::Comment(crate::comments::CommentTool::Ink) =>
+            if matches!(a.shape, pdfcraft_engine::Shape::Ink { .. } | pdfcraft_engine::Shape::FreehandHighlight { .. })
+                && matches!(
+                    quick_tool,
+                    crate::QuickTool::Comment(crate::comments::CommentTool::Ink | crate::comments::CommentTool::FreehandHighlight)
+                ) =>
         {
             view.comments.selected = None;
         }
