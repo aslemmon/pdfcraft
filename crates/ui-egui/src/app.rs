@@ -93,6 +93,13 @@ impl PdfCraftApp {
             theme: ThemeKind::Light,
             // A fresh install follows the desktop's appearance (#1248); saved settings override.
             theme_preference: ThemePreference::System,
+
+            show_discord_button: true,
+            show_keyboard_shortcuts_button: true,
+            show_display_theme_button: true,
+            show_preferences_button: true,
+            show_main_toolbar: true,
+            show_right_navigation_toolbar: true,
             reading_colors: Default::default(),
             show_page_edge_shadows: true,
             #[cfg(target_os = "linux")]

@@ -544,6 +544,13 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
     });
     ui.add_space(12.0);
 
+    // Card 7: Toolbar & Interface
+    let title7 = tl!("Toolbar & Interface");
+    preference_card(ui, t, title7, Some("settings"), &mut ctx, |ui, ctx| {
+        card_toolbar_and_interface(ui, app, t, ctx);
+    });
+    ui.add_space(12.0);
+
     if ctx.first_match_scrolled {
         ui.data_mut(|d| d.insert_temp(last_scrolled_id, query.clone()));
     } else if query.trim().is_empty() {
@@ -810,6 +817,17 @@ fn card_javascript(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, ctx: &m
         ),
         t,
     );
+}
+
+/// Content for Card 7: Toolbar & Interface.
+fn card_toolbar_and_interface(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, ctx: &mut PrefSearchContext) {
+    ctx.checkbox(ui, &mut app.show_discord_button, tl!("Show Discord button"), t);
+    ctx.checkbox(ui, &mut app.show_keyboard_shortcuts_button, tl!("Show keyboard shortcuts button"), t);
+    ctx.checkbox(ui, &mut app.show_display_theme_button, tl!("Show display theme button"), t);
+    ctx.checkbox(ui, &mut app.show_preferences_button, tl!("Show Preferences button"), t);
+    ui.add_space(6.0);
+    ctx.checkbox(ui, &mut app.show_main_toolbar, tl!("Show main toolbar"), t);
+    ctx.checkbox(ui, &mut app.show_right_navigation_toolbar, tl!("Show right navigation toolbar"), t);
 }
 
 /// Preferences dialog buttons: OK on the right. Returns true to close.

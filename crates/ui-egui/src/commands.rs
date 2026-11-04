@@ -262,6 +262,9 @@ impl PdfCraftApp {
             "view.select_tool" => self.quick_tool = crate::QuickTool::Select,
             "view.hand_tool" => self.quick_tool = crate::QuickTool::Hand,
             "view.side_panel" => self.toggle_side_panel(),
+            "view.toggle_navigation_rail" => {
+                self.show_right_navigation_toolbar = !self.show_right_navigation_toolbar;
+            }
             "view.tools_pane" => self.left_open = !self.left_open,
             "view.focus_page_input" => {
                 if let (Some(ctx), Some(view)) = (self.ctx.clone(), active.and_then(|i| self.views.get_mut(i))) {
