@@ -69,10 +69,20 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     app.active = None;
                     app.combine_tab.focused = false;
                 }
-                // Reserve the three icon buttons, Discord and their gaps outside the scrolling tabs.
-                let controls_width = ui.fonts_mut(|f| f.layout_no_wrap("Discord".into(), theme::medium(13.0), t.text).size().x)
-                    + 3.0 * button
-                    + 54.0
+                // Reserve only the buttons currently visible outside the scrolling tabs.
+                let icon_button_count = [app.show_preferences_button, app.show_display_theme_button, app.show_keyboard_shortcuts_button]
+                    .into_iter()
+                    .filter(|visible| *visible)
+                    .count();
+                let visible_button_count = icon_button_count + if app.show_discord_button { 1 } else { 0 };
+                let discord_width = if app.show_discord_button {
+                    ui.fonts_mut(|f| f.layout_no_wrap("Discord".into(), theme::medium(13.0), t.text).size().x)
+                } else {
+                    0.0
+                };
+                let controls_width = discord_width
+                    + icon_button_count as f32 * button
+                    + visible_button_count.saturating_sub(1) as f32 * 18.0
                     + window_controls::width(&controls.right);
                 // Open stays in sight after the tabs: its icon, text and padding, and the gaps around it.
                 let open_width = ui.fonts_mut(|f| f.layout_no_wrap(tl!("Open").into(), theme::medium(13.0), t.text).size().x) + 38.0 + 12.0;
@@ -287,30 +297,36 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         });
                         ui.add_space(window_controls::SIDE_GAP - 4.0);
                     }
-                    if icons::button(ui, "settings", button, false, tl!("Preferences")).clicked() {
+                    if app.show_preferences_button && icons::button(ui, "settings", button, false, tl!("Preferences")).clicked() {
                         app.execute("app.preferences");
                     }
-                    let (icon, label) = match app.theme_preference {
-                        ThemePreference::System => ("monitor", tl!("Use system setting")),
-                        ThemePreference::Light => ("sun", tl!("Light gray")),
-                        ThemePreference::Dark => ("moon", tl!("Dark gray")),
-                    };
-                    let tip = format!("{}: {label}", tl!("Display theme"));
-                    let response = icons::button(ui, icon, button, false, &tip);
-                    // A click cycles System, Light, Dark; a right-click opens the menu.
-                    if response.clicked() {
-                        app.execute(match app.theme_preference {
-                            ThemePreference::System => "view.theme.light",
-                            ThemePreference::Light => "view.theme.dark",
-                            ThemePreference::Dark => "view.theme.system",
-                        });
+                    if app.show_display_theme_button {
+                        let (icon, label) = match app.theme_preference {
+                            ThemePreference::System => ("monitor", tl!("Use system setting")),
+                            ThemePreference::Light => ("sun", tl!("Light gray")),
+                            ThemePreference::Dark => ("moon", tl!("Dark gray")),
+                        };
+                        let tip = format!("{}: {label}", tl!("Display theme"));
+                        let response = icons::button(ui, icon, button, false, &tip);
+                        // A click cycles System, Light, Dark; a right-click opens the menu.
+                        if response.clicked() {
+                            app.execute(match app.theme_preference {
+                                ThemePreference::System => "view.theme.light",
+                                ThemePreference::Light => "view.theme.dark",
+                                ThemePreference::Dark => "view.theme.system",
+                            });
+                        }
+                        egui::Popup::context_menu(&response).id(response.id.with("theme_menu")).show(|ui| appearance_menu(app, ui));
                     }
-                    egui::Popup::context_menu(&response).id(response.id.with("theme_menu")).show(|ui| appearance_menu(app, ui));
-                    if icons::button(ui, "circle-help", button, false, tl!("Keyboard shortcuts")).clicked() {
+                    if app.show_keyboard_shortcuts_button && icons::button(ui, "circle-help", button, false, tl!("Keyboard shortcuts")).clicked() {
                         app.dialog = Some(Dialog::Shortcuts);
                     }
                     // One click to the community, from anywhere in the app.
-                    if widgets::ghost_button_sized(ui, "messages-square", "Discord", tab_h).on_hover_text(pdfcraft_engine::links::DISCORD).clicked() {
+                    if app.show_discord_button
+                        && widgets::ghost_button_sized(ui, "messages-square", "Discord", tab_h)
+                            .on_hover_text(pdfcraft_engine::links::DISCORD)
+                            .clicked()
+                    {
                         app.execute("help.discord");
                     }
                 });
@@ -478,6 +494,12 @@ fn tab(ui: &mut egui::Ui, spec: TabSpec<'_>, close: &mut Option<usize>) -> egui:
 }
 
 pub fn mode_bar(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+    // macOS has a native menu bar, so the entire row can disappear.
+    // Other platforms must retain the row for the application menus.
+    if app.native_menu.is_some() && !app.show_main_toolbar {
+        return;
+    }
+
     let t = Tokens::get(ui.ctx());
     egui::Panel::top("mode_bar")
         .exact_size(48.0)
@@ -492,41 +514,43 @@ pub fn mode_bar(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     ui.painter().vline(ui.cursor().left(), ui.max_rect().y_range().shrink(12.0), Stroke::new(1.0, t.divider));
                     ui.add_space(10.0);
                 }
-                // Acrobat's mode bar has no Read tab: reading is what the viewer does with no tool
-                // in use. Read mode (the panes hidden) stays a View command and a default workspace.
-                for (mode, label) in [(Mode::AllTools, "All tools"), (Mode::Edit, "Edit"), (Mode::Convert, "Convert"), (Mode::Sign, "E-Sign")] {
-                    if widgets::mode_tab(ui, tl!(label), app.mode == mode).clicked() {
-                        app.switch_mode(mode, true);
+                if app.show_main_toolbar {
+                    // Acrobat's mode bar has no Read tab: reading is what the viewer does with no tool
+                    // in use. Read mode (the panes hidden) stays a View command and a default workspace.
+                    for (mode, label) in [(Mode::AllTools, "All tools"), (Mode::Edit, "Edit"), (Mode::Convert, "Convert"), (Mode::Sign, "E-Sign")] {
+                        if widgets::mode_tab(ui, tl!(label), app.mode == mode).clicked() {
+                            app.switch_mode(mode, true);
+                        }
                     }
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    let has_doc = app.active.is_some();
-                    ui.add_enabled_ui(has_doc, |ui| {
-                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Print ({key})"), "print.dialog");
-                        // A document that forbids printing says so here, before the dialog (#2669).
-                        let may_print = !has_doc || pdfcraft_engine::commands::command("print.dialog").is_some_and(|c| app.command_enabled(c));
-                        let mut print = ui.add_enabled_ui(may_print, |ui| icons::button(ui, "printer", 32.0, false, &tip)).inner;
-                        if !may_print {
-                            print = print.on_disabled_hover_text(crate::print_refused());
-                        }
-                        if print.clicked() {
-                            app.run_command("print.dialog");
-                        }
-                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Save ({key})"), "file.save");
-                        if icons::button(ui, "save", 32.0, false, &tip).clicked() {
-                            app.run_command("file.save");
-                        }
-                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Document properties ({key})"), "file.properties");
-                        if icons::button(ui, "info", 32.0, false, &tip).clicked() {
-                            app.dialog = Some(Dialog::Properties(PropsTab::Description));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        let has_doc = app.active.is_some();
+                        ui.add_enabled_ui(has_doc, |ui| {
+                            let tip = crate::commands::command_tip(ui.ctx(), tl!("Print ({key})"), "print.dialog");
+                            // A document that forbids printing says so here, before the dialog (#2669).
+                            let may_print = !has_doc || pdfcraft_engine::commands::command("print.dialog").is_some_and(|c| app.command_enabled(c));
+                            let mut print = ui.add_enabled_ui(may_print, |ui| icons::button(ui, "printer", 32.0, false, &tip)).inner;
+                            if !may_print {
+                                print = print.on_disabled_hover_text(crate::print_refused());
+                            }
+                            if print.clicked() {
+                                app.run_command("print.dialog");
+                            }
+                            let tip = crate::commands::command_tip(ui.ctx(), tl!("Save ({key})"), "file.save");
+                            if icons::button(ui, "save", 32.0, false, &tip).clicked() {
+                                app.run_command("file.save");
+                            }
+                            let tip = crate::commands::command_tip(ui.ctx(), tl!("Document properties ({key})"), "file.properties");
+                            if icons::button(ui, "info", 32.0, false, &tip).clicked() {
+                                app.dialog = Some(Dialog::Properties(PropsTab::Description));
+                            }
+                        });
+                        ui.add_space(8.0);
+                        if widgets::search_box(ui, tl!("Find tools and commands"), 260.0).clicked() {
+                            app.palette_open = true;
                         }
                     });
-                    ui.add_space(8.0);
-                    if widgets::search_box(ui, tl!("Find tools and commands"), 260.0).clicked() {
-                        app.palette_open = true;
-                    }
-                });
+                }
             });
         });
 }

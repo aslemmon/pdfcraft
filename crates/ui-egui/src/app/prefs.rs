@@ -86,6 +86,11 @@ impl PdfCraftApp {
             "last_session": self.reopen_last_session.then(|| self.session_to_save()),
             "reload_changed_files": self.reload_changed_files,
             "system_title_bar": self.system_title_bar,
+            "show_discord_button": self.show_discord_button,
+            "show_keyboard_shortcuts_button": self.show_keyboard_shortcuts_button,
+            "show_display_theme_button": self.show_display_theme_button,
+            "show_preferences_button": self.show_preferences_button,
+            "show_main_toolbar": self.show_main_toolbar,
             "pinned_folders": self.pinned.folders,
             "theme": self.theme_preference,
             "scroll_speed": self.scroll_speed,
@@ -215,6 +220,22 @@ impl PdfCraftApp {
         self.last_session = last_session::LastSession::from_json(&v["last_session"]);
         if let Some(on) = v["system_title_bar"].as_bool() {
             self.system_title_bar = on;
+        }
+
+        if let Some(on) = v["show_discord_button"].as_bool() {
+            self.show_discord_button = on;
+        }
+        if let Some(on) = v["show_keyboard_shortcuts_button"].as_bool() {
+            self.show_keyboard_shortcuts_button = on;
+        }
+        if let Some(on) = v["show_display_theme_button"].as_bool() {
+            self.show_display_theme_button = on;
+        }
+        if let Some(on) = v["show_preferences_button"].as_bool() {
+            self.show_preferences_button = on;
+        }
+        if let Some(on) = v["show_main_toolbar"].as_bool() {
+            self.show_main_toolbar = on;
         }
         if let Some(on) = v["reload_changed_files"].as_bool() {
             self.reload_changed_files = on;
