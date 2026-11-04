@@ -3220,7 +3220,7 @@ fn track_scroll<T>(ui: &egui::Ui, view: &mut DocView, out: &egui::containers::sc
 /// The hover tip, find bar, size hint and the in-place editors drawn over the pages. Whether the
 /// text editor was finished.
 fn frame_overlays(ui: &mut egui::Ui, view: &mut DocView, env: &PageEnv<'_>, primary_down: bool, hover_text: Option<(Pos2, String)>) -> bool {
-    let PageEnv { added, author, avail, can_modify, doc, form, info, prefs, t, today, tool, units, unobstructed, .. } = *env;
+    let PageEnv { added, author, avail, can_modify, doc, form, info, prefs, t, today, tool, units: _, unobstructed, .. } = *env;
     if let Some((pos, text)) = hover_text {
         // Click-through, as a tooltip is: the pages lose the pointer under anything that isn't.
         let tip = egui::Area::new(egui::Id::unique("canvas-hover")).order(egui::Order::Tooltip).interactable(false);
