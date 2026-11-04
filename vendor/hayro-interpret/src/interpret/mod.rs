@@ -184,139 +184,203 @@ pub fn interpret_page<'a>(
     context: &mut Context<'a>,
     device: &mut impl Device<'a>,
 ) {
-    // PdfCraft patch (73): a context used again is another page.
     hayro_syntax::set_page_jbig2_work(context.settings.jbig2_work);
     let _allowance = PageJbig2Work;
     let resources = page.resources();
     let mut content = page.content_reader();
-    // PdfCraft patch: the page's own contents count against its content budget too, where they
-    // are decoded whole. Streamed content is only ever held a window at a time.
     crate::context::charge_content(content.materialized_len());
     interpret_content(&mut content, resources, context, device);
 
     if context.settings.render_annotations
         && let Some(annot_arr) = page.raw().get::<Array<'_>>(ANNOTS)
     {
-        // PdfCraft patch (29): bracket the annotations so devices can tell their paints from
-        // the document's own (the reading-colours setting recolours the document, not comments).
         device.begin_annotations();
+
+        // Highlights are rendered together so overlapping annotations replace
+        // earlier paints instead of blending with them.
+        if annot_arr.iter::<Dict<'_>>().any(|annot| {
+            annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref()
+                == Some(b"Highlight")
+        }) {
+            draw_highlight_annotations(
+                page,
+                resources,
+                &annot_arr,
+                context,
+                device,
+            );
+        }
+
+        // Keep other annotation types on their existing rendering path.
+        // Highlights are grouped separately, so their stacking relative to
+        // other annotation types may differ from the original /Annots order.
         for annot in annot_arr.iter::<Dict<'_>>() {
-            let flags = annot.get::<u32>(F).unwrap_or(0);
-
-            // Annotation should be hidden (Hidden = bit 2, NoView = bit 6).
-            // PdfCraft patch: NoView was not honoured upstream.
-            if flags & (2 | 32) != 0 {
-                continue;
-            }
-            // PdfCraft patch (56): Invisible (bit 1) hides an annotation of a type that isn't one
-            // of the standard ones (ISO 32000-2 Table 167), and a popup has no appearance of its
-            // own (§12.5.6.14): the viewer shows it as a window for its parent, not on the page.
-            let subtype = annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE);
-            if subtype.as_deref() == Some(b"Popup")
-                || (flags & 1 != 0 && !subtype.as_deref().is_some_and(is_standard_annotation_type))
-            {
-                continue;
-            }
-            // PdfCraft patch: "Hide all comments" keeps widgets and links.
-            if context.settings.hide_comments
-                && !matches!(annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref(), Some(b"Widget" | b"Link"))
+            if annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref()
+                == Some(b"Highlight")
             {
                 continue;
             }
 
-            // PdfCraft patch: `/N` may be a stream or a dictionary of appearance states selected
-            // by `/AS` (checkboxes, radio buttons, …). Upstream only handled the stream form.
-            let normal = annot.get::<Dict<'_>>(AP).and_then(|ap| {
-                ap.get::<Stream<'_>>(N).or_else(|| {
-                    let states = ap.get::<Dict<'_>>(N)?;
-                    let state = annot.get::<hayro_syntax::object::Name<'_>>(AS)?;
-                    states.get::<Stream<'_>>(state.as_ref())
-                })
-            });
-            if let Some(apx) = normal.and_then(|o| FormXObject::new(&o)) {
-                let Some(rect) = annot.get::<Rect>(RECT) else {
-                    continue;
-                };
+            draw_annotation(&annot, page, resources, context, device);
+        }
 
-                let annot_rect = rect.to_kurbo();
-                // 12.5.5. Appearance streams
-                // "The algorithm outlined in this subclause shall be used
-                // to map from the coordinate system of the appearance XObject."
+        device.end_annotations();
+    }
+}
 
-                // 1) The appearance’s bounding box (specified by its BBox entry)
-                // shall be transformed, using Matrix, to produce a
-                // quadrilateral with arbitrary orientation. The transformed
-                // appearance box is the smallest upright rectangle that
-                // encompasses this quadrilateral.
-                let transformed_rect = (apx.matrix
-                    * kurbo::Rect::new(
-                        apx.bbox[0] as f64,
-                        apx.bbox[1] as f64,
-                        apx.bbox[2] as f64,
-                        apx.bbox[3] as f64,
-                    )
-                    .to_path(0.1))
-                .bounding_box();
+fn draw_highlight_annotations<'a>(
+    page: &Page<'a>,
+    resources: &Resources<'a>,
+    annot_arr: &Array<'a>,
+    context: &mut Context<'a>,
+    device: &mut impl Device<'a>,
+) {
+    // Knockout groups need a separate pass for each blend mode used by
+    // their contents. Reset optional-content visibility before each pass.
+    let visibility = context.ocg_state.visibility();
+    let mut modes = vec![BlendMode::Normal];
+    let mut pass = 0;
 
-                // 2) A matrix A shall be computed that scales and translates
-                // the transformed appearance box to align with the edges
-                // of the annotation’s rectangle (specified by the Rect entry).
-                // A maps the lower-left corner (the corner with the smallest
-                // x and y coordinates) and the upper-right corner (the
-                // corner with the greatest x and y coordinates) of the
-                // transformed appearance box to the corresponding corners
-                // of the annotation’s rectangle.
-                // PdfCraft patch: the translation is taken after scaling (it was
-                // `/Rect.x0 - box.x0`, right only for a box at the origin or a scale of 1).
-                let (sx, sy) = (
-                    annot_rect.width() / transformed_rect.width(),
-                    annot_rect.height() / transformed_rect.height(),
-                );
-                let affine = Affine::new([
-                    sx,
-                    0.0,
-                    0.0,
-                    sy,
-                    annot_rect.x0 - sx * transformed_rect.x0,
-                    annot_rect.y0 - sy * transformed_rect.y0,
-                ]);
-                // PdfCraft patch (59): NoRotate (bit 5) keeps the appearance upright as the page is
-                // displayed (ISO 32000-2 §12.5.3).
-                let affine = if flags & 16 != 0 && no_rotate_applies(&annot) {
-                    no_rotate_turn(page.rotation(), &annot_rect) * affine
-                } else {
-                    affine
-                };
+    while let Some(&mode) = modes.get(pass) {
+        context.ocg_state.set_visibility(visibility.clone());
 
-                // PdfCraft patch: a /BBox or /Matrix that collapses the appearance box to a line
-                // or a point leaves nothing to map onto /Rect: the scales above divide by zero,
-                // and the infinite or NaN matrix reached the device with everything the
-                // appearance draws. Clipped to such a box the appearance shows nothing, so skip
-                // it, as when the mapping overflows.
-                if !(transformed_rect.is_finite()
-                    && transformed_rect.width() > 0.0
-                    && transformed_rect.height() > 0.0
-                    && affine.is_finite())
-                {
-                    continue;
-                }
+        context.save_state();
 
-                // 3) Matrix shall be concatenated with A to form a matrix
-                // AA that maps from the appearance’s coordinate system to
-                // the annotation’s rectangle in default user space.
-                context.save_state();
-                context.pre_concat_affine(affine);
-                context.push_root_transform();
+        // A non-isolated knockout group lets each highlight replace the
+        // backdrop in its painted area while retaining its own appearance
+        // opacity and blend mode.
+        device.push_transparency_group(1.0, None, mode);
+        device.set_knockout();
+        device.begin_knockout_pass(mode);
+        device.set_soft_mask(None);
+        device.set_blend_mode(BlendMode::Normal);
 
-                draw_form_xobject(resources, &apx, context, device);
-                context.pop_root_transform();
-                context.restore_state(device);
-            } else if annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref() == Some(b"Highlight") {
-                // PdfCraft patch: a Highlight without a usable normal appearance was not drawn.
-                draw_highlight_without_appearance(&annot, context, device);
+        for annot in annot_arr.iter::<Dict<'_>>() {
+            if annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref()
+                == Some(b"Highlight")
+            {
+                draw_annotation(&annot, page, resources, context, device);
             }
         }
-        device.end_annotations();
+
+        // The first pass reports additional blend modes that require
+        // their own passes through the same annotation group.
+        let others = device.end_knockout_pass();
+        device.pop_transparency_group();
+
+        context.restore_state(device);
+        context.path_mut().truncate(0);
+
+        if pass == 0 {
+            for other in others {
+                if !modes.contains(&other) {
+                    modes.push(other);
+                }
+            }
+        }
+
+        pass += 1;
+    }
+
+    context.ocg_state.set_visibility(visibility);
+}
+
+fn draw_annotation<'a>(
+    annot: &Dict<'a>,
+    page: &Page<'a>,
+    resources: &Resources<'a>,
+    context: &mut Context<'a>,
+    device: &mut impl Device<'a>,
+) {
+    let flags = annot.get::<u32>(F).unwrap_or(0);
+
+    if flags & (2 | 32) != 0 {
+        return;
+    }
+
+    let subtype = annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE);
+
+    if subtype.as_deref() == Some(b"Popup")
+        || (flags & 1 != 0
+            && !subtype.as_deref().is_some_and(is_standard_annotation_type))
+    {
+        return;
+    }
+
+    if context.settings.hide_comments
+        && !matches!(
+            subtype.as_deref(),
+            Some(b"Widget" | b"Link")
+        )
+    {
+        return;
+    }
+
+    // /N may be either a single appearance stream or a dictionary of
+    // appearance states selected by the annotation's /AS entry.
+    let normal = annot.get::<Dict<'_>>(AP).and_then(|ap| {
+        ap.get::<Stream<'_>>(N).or_else(|| {
+            let states = ap.get::<Dict<'_>>(N)?;
+            let state = annot.get::<hayro_syntax::object::Name<'_>>(AS)?;
+            states.get::<Stream<'_>>(state.as_ref())
+        })
+    });
+
+    if let Some(apx) = normal.and_then(|o| FormXObject::new(&o)) {
+        let Some(rect) = annot.get::<Rect>(RECT) else {
+            return;
+        };
+
+        let annot_rect = rect.to_kurbo();
+
+        // Map the transformed appearance bounding box onto the annotation
+        // rectangle, as required by the PDF annotation appearance rules.
+        let transformed_rect = (apx.matrix
+            * kurbo::Rect::new(
+                apx.bbox[0] as f64,
+                apx.bbox[1] as f64,
+                apx.bbox[2] as f64,
+                apx.bbox[3] as f64,
+            )
+            .to_path(0.1))
+        .bounding_box();
+
+        let (sx, sy) = (
+            annot_rect.width() / transformed_rect.width(),
+            annot_rect.height() / transformed_rect.height(),
+        );
+
+        let affine = Affine::new([
+            sx,
+            0.0,
+            0.0,
+            sy,
+            annot_rect.x0 - sx * transformed_rect.x0,
+            annot_rect.y0 - sy * transformed_rect.y0,
+        ]);
+
+        let affine = if flags & 16 != 0 && no_rotate_applies(annot) {
+            no_rotate_turn(page.rotation(), &annot_rect) * affine
+        } else {
+            affine
+        };
+
+        if !(transformed_rect.is_finite()
+            && transformed_rect.width() > 0.0
+            && transformed_rect.height() > 0.0
+            && affine.is_finite())
+        {
+            return;
+        }
+
+        context.save_state();
+        context.pre_concat_affine(affine);
+        context.push_root_transform();
+        draw_form_xobject(resources, &apx, context, device);
+        context.pop_root_transform();
+        context.restore_state(device);
+    } else if subtype.as_deref() == Some(b"Highlight") {
+        draw_highlight_without_appearance(annot, context, device);
     }
 }
 
