@@ -7,21 +7,13 @@ pub(super) fn in_size_hint_zone(area: Rect, p: Pos2) -> bool {
 
 /// The current page's size, floating at the bottom-left of the document area while the pointer is
 /// in that quadrant, as Acrobat does. Same formatter and unit as Document Properties.
-pub(super) fn page_size_hint(
-    view: &DocView,
-    info: &DocInfo,
-    units: crate::units::Unit,
-    area: Rect,
-    unobstructed: bool,
-    ui: &mut egui::Ui,
-    t: &Tokens,
-) {
+pub(super) fn page_size_hint(view: &DocView, info: &DocInfo, area: Rect, unobstructed: bool, ui: &mut egui::Ui, t: &Tokens) {
     let Some(page) = info.pages.get(view.current) else { return };
     let inside = unobstructed && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| in_size_hint_zone(area, p));
     if !inside {
         return;
     }
-    let text = units.size(f64::from(page.width), f64::from(page.height));
+    let text = format!("Page {}/{}", view.current + 1, info.pages.len());
     egui::Area::new(egui::Id::unique("page-size-hint"))
         .order(egui::Order::Foreground)
         .interactable(false)

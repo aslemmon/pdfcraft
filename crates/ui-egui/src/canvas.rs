@@ -3232,7 +3232,7 @@ fn frame_overlays(ui: &mut egui::Ui, view: &mut DocView, env: &PageEnv<'_>, prim
         });
     }
     find_bar(view, info.pages.len(), avail, ui, t);
-    page_size_hint(view, info, units, avail, unobstructed, ui, t);
+    page_size_hint(view, info, avail, unobstructed, ui, t);
     if tool == QuickTool::EnhanceCamera {
         crate::camera_ui::bar(ui.ctx(), view, avail, t, can_modify);
     }
