@@ -20,7 +20,7 @@ Completed features are merged into `personal-build` after testing. Individual fe
 | `feature/triple-click-highlight` | Triple-click text highlighting | Complete |
 | `feature/deselect-after-highlight` | Automatically deselect after highlighting | Complete |
 | `feature/custom-highlight-colors` | Save and reuse custom highlight colors; annotation shortcuts | Complete |
-| `feature/hide-toolbars` | Show/hide application toolbars | Planned |
+| `feature/hide-toolbars` | Show/hide application toolbars | Complete |
 | `feature/highlight-keyboard-shortcuts` | Originally planned keyboard shortcuts | Superseded |
 | `feature/multiple-windows` | Open documents in separate application windows | Planned |
 | `feature/overlapping-text-highlights` | Prevent overlapping highlights from blending or becoming darker | Complete |
@@ -95,7 +95,33 @@ Completed features are merged into `personal-build` after testing. Individual fe
 
 **Objective:** Provide the ability to hide and restore application toolbars to create a cleaner document viewing and reading experience.
 
-**Status:** Planned.
+**Implemented behavior:**
+
+- Added preferences to control the visibility of application toolbar elements.
+- Added independent visibility controls for the main toolbar and right navigation toolbar.
+- Added visibility controls for individual title-bar buttons, including Preferences, display theme, keyboard shortcuts and Discord.
+- Preserved window controls and their platform-specific layout.
+- Adjusted toolbar width calculations to account for buttons that are actually visible.
+- Improved tab sizing and scrolling behavior when toolbar space is limited.
+- Kept the Open button visible after the scrolling document tabs.
+- Preserved GNOME on Wayland window dragging and double-click maximize behavior.
+- Maintained the native macOS menu bar behavior.
+- Preserved the page-size hover indicator and its existing positioning.
+
+**Implementation status:** Complete.
+
+**Branch:** `feature/hide-toolbars`.
+
+**Testing:** `cargo build` completed successfully after implementation and cleanup.
+
+Two compiler warnings introduced by the page-size hint changes were corrected:
+
+- Removed the unused page binding in `canvas/bars.rs`.
+- Explicitly ignored the unused `units` field in the `PageEnv` destructuring in `canvas.rs`.
+
+The remaining Cargo warnings concern unused dependency patches for optional egui packages and are unrelated to the toolbar implementation.
+
+**Personal-build integration:** Ready for integration following the feature-branch merge.
 
 ### 5\. Open Files in Multiple Windows
 
@@ -188,6 +214,8 @@ Guidelines:
 | 2026-10-31 | Merged custom highlight colors and annotation shortcuts | `personal-build` | Merge commit `21c8c5f0`; build and manual testing completed |
 | 2026-11-03 | Implemented overlapping-highlight rendering improvement | `feature/overlapping-text-highlights` | Knockout rendering; no annotation-data or geometry changes |
 | 2026-11-03 | Completed overlapping-highlight GUI testing and integration | `personal-build` | Color replacement, readability, undo/redo, save/reopen verified |
+| 2026-11-03 | Implemented hide-toolbars customization | `feature/hide-toolbars` | Toolbar visibility preferences and responsive toolbar layout completed |
+| 2026-11-03 | Fixed toolbar-related compiler warnings | `feature/hide-toolbars` | Removed unused page binding and ignored unused `units` field; build verified |
 
 ---
 
