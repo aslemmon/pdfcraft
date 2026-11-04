@@ -2,11 +2,11 @@
 
 This document tracks personal enhancements and modifications to PdfCraft.
 
-The intention is to maintain a customised version of PdfCraft while keeping it as compatible as possible with the original upstream project (https://github.com/storytold/pdfcraft).
+The intention is to maintain a customized version of PdfCraft while keeping it as compatible as possible with the original upstream project ([https://github.com/storytold/pdfcraft](<https://github.com/storytold/pdfcraft>)).
 
 ## Development Strategy
 
-Customisations are developed independently in feature branches and consolidated into a dedicated `personal-build` branch.
+Customizations are developed independently in feature branches and consolidated into a dedicated `personal-build` branch.
 
 The original project's `main` branch remains as close as possible to upstream.
 
@@ -15,7 +15,7 @@ Completed features are merged into `personal-build` after testing. Individual fe
 ## Branch Structure
 
 | Branch | Purpose | Status |
-|---|---|---|
+| --- | --- | --- |
 | `main` | Clean copy of the original upstream project | Maintained |
 | `feature/triple-click-highlight` | Triple-click text highlighting | Complete |
 | `feature/deselect-after-highlight` | Automatically deselect after highlighting | Complete |
@@ -23,12 +23,12 @@ Completed features are merged into `personal-build` after testing. Individual fe
 | `feature/hide-toolbars` | Show/hide application toolbars | Planned |
 | `feature/highlight-keyboard-shortcuts` | Originally planned keyboard shortcuts | Superseded |
 | `feature/multiple-windows` | Open documents in separate application windows | Planned |
-| `feature/overlapping-text-highlights` | Prevent same-color overlapping highlights from becoming darker | Planned |
-| `personal-build` | Consolidated version containing completed customisations | Active |
+| `feature/overlapping-text-highlights` | Prevent overlapping highlights from blending or becoming darker | Complete |
+| `personal-build` | Consolidated version containing completed customizations | Active |
 
 ## Feature Roadmap
 
-### 1. Triple-click Highlights
+### 1\. Triple-click Highlights
 
 **Branch:** `feature/triple-click-highlight`
 
@@ -39,12 +39,13 @@ Completed features are merged into `personal-build` after testing. Individual fe
 **Commit:** `d56f0ef8`
 
 **Verified behavior:**
+
 - Double-click highlights a word.
 - Triple-click highlights a line.
 - Additional clicks do not create extra highlights.
 - Existing text selection behavior remains intact.
 
-### 2. Deselect After Highlight
+### 2\. Deselect After Highlight
 
 **Branch:** `feature/deselect-after-highlight`
 
@@ -58,13 +59,14 @@ Completed features are merged into `personal-build` after testing. Individual fe
 
 **Integration commit:** `b0b67f60`.
 
-### 3. Custom Highlight Colors and Annotation Keyboard Shortcuts
+### 3\. Custom Highlight Colors and Annotation Keyboard Shortcuts
 
 **Branch:** `feature/custom-highlight-colors`
 
 **Objective:** Improve annotation efficiency by allowing users to save custom highlight colors and quickly access annotation tools and saved colors using keyboard shortcuts.
 
 **Implemented behavior:**
+
 - Allow users to create custom highlight colors.
 - Save favorite colors persistently across application sessions.
 - Retain the existing standard highlight colors.
@@ -77,6 +79,7 @@ Completed features are merged into `personal-build` after testing. Individual fe
 **Implementation status:** Complete.
 
 **Commits:**
+
 - `af672818` – Add persistent custom highlight colour pins.
 - `6c73bc27` – Add annotation keyboard shortcuts.
 
@@ -86,7 +89,7 @@ Completed features are merged into `personal-build` after testing. Individual fe
 
 **Testing:** Build completed successfully, UI test suite and manual feature testing completed.
 
-### 4. Hide Toolbars
+### 4\. Hide Toolbars
 
 **Branch:** `feature/hide-toolbars`
 
@@ -94,7 +97,7 @@ Completed features are merged into `personal-build` after testing. Individual fe
 
 **Status:** Planned.
 
-### 5. Open Files in Multiple Windows
+### 5\. Open Files in Multiple Windows
 
 **Branch:** `feature/multiple-windows`
 
@@ -102,21 +105,60 @@ Completed features are merged into `personal-build` after testing. Individual fe
 
 **Status:** Planned.
 
-### 6. Prevent Overlapping Highlights from Becoming Darker
+### 6\. Prevent Overlapping Highlights from Becoming Darker
 
 **Branch:** `feature/overlapping-text-highlights`
 
-**Objective:** Make overlapping highlights of the same color behave consistently with macOS Preview.
+**Objective:** Make overlapping highlights behave consistently with macOS Preview, with the newest highlight replacing the color of earlier highlights in the overlapping region.
 
-**Desired behavior:**
-- Applying the same highlight color over existing highlights should not progressively darken the overlapping area.
-- Overlapping highlights of the same color should appear visually consistent with a single highlight.
-- Highlighting previously unhighlighted text should continue to work normally.
-- Different highlight colors should remain independently supported.
+**Desired and implemented behavior:**
 
-**Status:** Planned – lower priority.
+- Applying the same highlight color repeatedly does not progressively darken the overlapping area.
+- Applying a different highlight color replaces the previous color in the selected region.
+- The newest highlight takes precedence wherever highlight regions overlap.
+- Existing highlight colors remain visible outside the overlapping region.
+- Highlighting previously unhighlighted text continues to work normally.
+- Text remains readable through the highlights.
+- Other annotation types, particularly Underline and StrikeOut, retain their existing rendering behavior.
 
-**Implementation consideration:** Investigate how Preview handles overlapping annotations before deciding whether to merge annotations, suppress duplicates, or adjust rendering behavior.
+**Implementation approach:**
+
+Rather than modifying annotation geometry, merging annotations, or changing their opacity, the solution uses PDF transparency knockout groups during rendering.
+
+All Highlight annotations are rendered together inside a non-isolated knockout group. The existing rendering infrastructure handles the necessary blend-mode passes, allowing newer highlights to replace earlier paints in their covered regions instead of blending with them.
+
+The implementation is confined to:
+
+`vendor/hayro-interpret/src/interpret/mod.rs`
+
+The existing Multiply blend mode and individual annotation opacity settings are preserved.
+
+**Important characteristics:**
+
+- No changes to annotation creation or editing.
+- No changes to `/QuadPoints` or original glyph geometry.
+- No changes to annotation colors, opacity, or metadata.
+- No new dependencies.
+- Existing annotation data remains intact and compatible with standard PDF rendering.
+- Highlights are grouped for rendering, so their stacking relationship with other annotation types may differ from their original interleaving in the PDF annotation array.
+
+**Implementation status:** Complete.
+
+**Testing:**
+
+- Repeated same-color highlighting produces no additional darkening.
+- Different-color highlighting replaces the previous color.
+- Reverse color replacement works correctly.
+- Partial overlaps preserve the original color outside the new selection.
+- Black text remains readable.
+- Underline and StrikeOut remain visible above highlights, regardless of application order.
+- Undo and redo work correctly.
+- Saving and reopening preserves the annotations and rendering behavior.
+- Opening the resulting PDF in standard PDFCraft confirms that the original annotation data remains intact; the difference is in PDFCraft's rendering behavior.
+
+**Remaining validation:** Skewed and rotated OCR text should be checked when suitable test documents are available. The implementation does not modify text geometry or annotation quadrilaterals.
+
+**Personal-build integration:** Complete.
 
 ## Upstream Compatibility
 
@@ -124,19 +166,19 @@ The project should remain easy to update as the original developers continue dev
 
 Guidelines:
 
-- Keep individual customisations isolated in feature branches.
+- Keep individual customizations isolated in feature branches.
 - Avoid unnecessary changes to existing functionality.
 - Avoid unnecessary dependency or Rust toolchain upgrades.
-- Keep `main` synchronised with upstream.
-- Regularly integrate upstream changes into customisation branches.
+- Keep `main` synchronized with upstream.
+- Regularly integrate upstream changes into customization branches.
 - Test consolidated changes before building a new personal release.
 - Consider submitting generally useful improvements as upstream pull requests.
 
 ## Change History
 
 | Date | Change | Branch | Notes |
-|---|---|---|---|
-| 2026-10-29 | Created customisation roadmap | `personal-build` | Initial development plan established |
+| --- | --- | --- | --- |
+| 2026-10-29 | Created customization roadmap | `personal-build` | Initial development plan established |
 | 2026-10-29 | Implemented triple-click highlighting | `feature/triple-click-highlight` | Committed as `d56f0ef8`; automated and manual testing completed |
 | 2026-10-29 | Implemented deselection after highlighting | `feature/deselect-after-highlight` | Committed as `b852f664`; integration testing completed |
 | 2026-10-29 | Added overlapping-highlight improvement | `personal-build` | Added to roadmap as a lower-priority improvement |
@@ -144,7 +186,9 @@ Guidelines:
 | 2026-10-31 | Added annotation keyboard shortcuts | `feature/custom-highlight-colors` | Committed as `6c73bc27` |
 | 2026-10-31 | Merged triple-click and deselect features | `personal-build` | Merge commit `b0b67f60` |
 | 2026-10-31 | Merged custom highlight colors and annotation shortcuts | `personal-build` | Merge commit `21c8c5f0`; build and manual testing completed |
+| 2026-11-03 | Implemented overlapping-highlight rendering improvement | `feature/overlapping-text-highlights` | Knockout rendering; no annotation-data or geometry changes |
+| 2026-11-03 | Completed overlapping-highlight GUI testing and integration | `personal-build` | Color replacement, readability, undo/redo, save/reopen verified |
 
 ---
 
-This document is maintained alongside the source code on `personal-build` and updated as customisations are implemented.
+This document is maintained alongside the source code on `personal-build` and updated as customizations are implemented.
