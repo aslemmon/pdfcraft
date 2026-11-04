@@ -91,6 +91,7 @@ impl PdfCraftApp {
             "show_display_theme_button": self.show_display_theme_button,
             "show_preferences_button": self.show_preferences_button,
             "show_main_toolbar": self.show_main_toolbar,
+            "show_right_navigation_toolbar": self.show_right_navigation_toolbar,
             "pinned_folders": self.pinned.folders,
             "theme": self.theme_preference,
             "scroll_speed": self.scroll_speed,
@@ -236,6 +237,9 @@ impl PdfCraftApp {
         }
         if let Some(on) = v["show_main_toolbar"].as_bool() {
             self.show_main_toolbar = on;
+        }
+        if let Some(on) = v["show_right_navigation_toolbar"].as_bool() {
+            self.show_right_navigation_toolbar = on;
         }
         if let Some(on) = v["reload_changed_files"].as_bool() {
             self.reload_changed_files = on;

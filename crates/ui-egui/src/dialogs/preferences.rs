@@ -827,6 +827,7 @@ fn card_toolbar_and_interface(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Toke
     ctx.checkbox(ui, &mut app.show_preferences_button, tl!("Show Preferences button"), t);
     ui.add_space(6.0);
     ctx.checkbox(ui, &mut app.show_main_toolbar, tl!("Show main toolbar"), t);
+    ctx.checkbox(ui, &mut app.show_right_navigation_toolbar, tl!("Show right navigation toolbar"), t);
 }
 
 /// Preferences dialog buttons: OK on the right. Returns true to close.

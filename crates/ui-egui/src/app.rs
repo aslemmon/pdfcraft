@@ -98,6 +98,7 @@ impl PdfCraftApp {
             show_display_theme_button: true,
             show_preferences_button: true,
             show_main_toolbar: true,
+            show_right_navigation_toolbar: true,
             reading_colors: Default::default(),
             show_page_edge_shadows: true,
             #[cfg(target_os = "linux")]

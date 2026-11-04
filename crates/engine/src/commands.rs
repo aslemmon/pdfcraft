@@ -249,6 +249,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         Nothing,
         "panel-left",
     ),
+    c("view.toggle_navigation_rail", "Show or hide navigation toolbar", VIEW, Some(Shortcut::cmd_shift("R")), Nothing, "panel-right"),
     c("ui.dock.reset", "Reset side panels", VIEW, None, Nothing, "settings"),
     c("view.theme", "Switch light / dark theme", None, None, Nothing, "moon"),
     c("view.theme.system", "Use system setting", None, None, Nothing, "settings"),

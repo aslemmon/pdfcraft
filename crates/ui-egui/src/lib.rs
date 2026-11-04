@@ -306,6 +306,7 @@ pub struct PdfCraftApp {
     pub show_display_theme_button: bool,
     pub show_preferences_button: bool,
     pub show_main_toolbar: bool,
+    pub show_right_navigation_toolbar: bool,
     /// The reading-colours preference (Preferences ▸ Reading colours): applied to every open
     /// document, and documents open with it (Acrobat's Replace Document Colors).
     pub reading_colors: pdfcraft_render::ReadingColors,
