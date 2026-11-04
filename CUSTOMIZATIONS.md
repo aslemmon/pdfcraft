@@ -123,13 +123,51 @@ The remaining Cargo warnings concern unused dependency patches for optional egui
 
 **Personal-build integration:** Ready for integration following the feature-branch merge.
 
-### 5\. Open Files in Multiple Windows
 
-**Branch:** `feature/multiple-windows`
+### 5. Open Files in Multiple Windows
 
-**Objective:** Allow multiple PDF documents to be opened in separate application windows rather than requiring all documents to share a single window.
+**Status:** Deferred – awaiting upstream implementation.
 
-**Status:** Planned.
+**Objective:** Allow PDF documents to be opened in separate application windows while preserving the existing tab-based workflow.
+
+**Desired behavior:**
+
+- Retain the existing behavior of opening newly opened PDFs as tabs in the current window.
+- Eventually allow users to open PDFs in separate application windows.
+- Preserve independent document state across windows.
+- Avoid replacing or disrupting the existing tab functionality.
+
+**Upstream development:**
+
+The following upstream discussions address closely related aspects of this functionality:
+
+- [PR #5357 – Tear off document tabs into separate window viewports](https://github.com/storytold/pdfcraft/pull/5357)
+  - Allows existing document tabs to be moved into separate windows.
+  - Supports detaching tabs through the context menu or by dragging them outside the tab bar.
+  - Includes the ability to reattach detached documents.
+  - Currently under upstream review; not yet merged.
+
+- [Issue #5556 – Add option to open PDFs in a new window instead of a new tab](https://github.com/storytold/pdfcraft/issues/5556)
+  - Requests a user preference to open newly opened PDFs in separate windows rather than tabs.
+  - Retains the existing tab-based behavior as the default.
+  - Covers opening documents through different application entry points.
+  - Currently open; not yet implemented.
+
+**Implementation strategy:**
+
+- Defer independent implementation while upstream development is ongoing.
+- Monitor both upstream discussions for progress and possible consolidation.
+- Prefer adopting upstream functionality over maintaining a separate customization.
+- Once upstream changes become available, test them and integrate into `personal-build`.
+- Only consider an independent implementation if upstream development does not address the desired functionality.
+
+**Command-line support:**
+
+PdfCraft already supports the `--new-window` command-line option, which opens a separate application window instead of forwarding files to an existing instance.
+
+This provides a possible interim solution for opening documents in separate windows through desktop file associations or application launchers.
+
+**Personal-build integration:** Deferred pending upstream developments.
 
 ### 6\. Prevent Overlapping Highlights from Becoming Darker
 
